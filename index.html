@@ -3,70 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>台灣案場分佈儀表板 - 終極版</title>
+    <title>台灣案場分佈儀表板 (CDN 加速版)</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
     <style>
-        /* --- 全域與背景設定 --- */
+        /* --- 系統全域設定 --- */
         :root {
-            --tech-blue: #00f0ff; /* 核心科技藍 */
-            --tech-bg: #0b1120;   /* 深藍底色，對照您的圖片 */
+            --tech-blue: #00f0ff; 
+            --tech-bg: #0b1120;
         }
         body, html { margin: 0; padding: 0; height: 100%; background-color: var(--tech-bg); font-family: "Segoe UI", Roboto, sans-serif; overflow: hidden; }
         #map { height: 100%; width: 100%; background: var(--tech-bg); z-index: 1; }
 
-        /* --- 核心地圖濾鏡 (將 OSM 轉為深色科技風) --- */
+        /* 地圖濾鏡：深海藍科技風格 */
         .leaflet-layer {
-            /* 高對比、深藍色調、反相 */
             filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(90%);
         }
 
-        /* --- 左上角儀表板面板 --- */
+        /* --- 載入中畫面 (Loading) --- */
+        #loading-screen {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 9999;
+            background: rgba(11, 17, 32, 0.9);
+            padding: 20px 40px; border: 1px solid var(--tech-blue);
+            color: var(--tech-blue); font-family: monospace; font-size: 16px;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+            text-align: center;
+            display: block; /* 預設顯示 */
+        }
+        .loading-bar {
+            display: inline-block; width: 0%; height: 2px; background: var(--tech-blue);
+            animation: loading 2s infinite ease-in-out; margin-top: 10px;
+        }
+        @keyframes loading { 0% { width: 0%; } 100% { width: 100%; } }
+
+        /* --- 儀表板面板 --- */
         .dashboard-overlay {
             position: absolute; top: 20px; left: 20px; z-index: 1000;
-            background: rgba(16, 26, 48, 0.85); /* 半透明深色背景 */
-            border: 1px solid rgba(0, 240, 255, 0.3); /* 細微藍框 */
+            background: rgba(16, 26, 48, 0.85);
+            border: 1px solid rgba(0, 240, 255, 0.3);
             padding: 20px; border-radius: 4px; color: #fff;
             backdrop-filter: blur(5px); box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        .dashboard-overlay h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: 500; letter-spacing: 1px; }
-        .dashboard-overlay p { margin: 5px 0; font-size: 14px; color: #aaa; }
+        .dashboard-overlay h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: 500; letter-spacing: 1px; color: var(--tech-blue); }
+        .dashboard-overlay p { margin: 5px 0; font-size: 14px; color: #ccc; }
 
-        /* --- 聚合點數字樣式 (對照圖片中的白色數字) --- */
+        /* --- 聚合點樣式 --- */
         .marker-cluster-custom {
-            background-color: rgba(255, 255, 255, 0.9); /* 白色背景 */
-            border: 3px solid var(--tech-blue); /* 藍色外框 */
-            border-radius: 50%;
-            color: #333; /* 深色文字 */
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 3px solid var(--tech-blue);
+            border-radius: 50%; color: #000;
             font-weight: bold; font-family: sans-serif; text-align: center;
-            box-shadow: 0 0 15px var(--tech-blue); /* 強烈藍色發光 */
+            box-shadow: 0 0 15px var(--tech-blue);
             font-size: 16px;
             display: flex !important; align-items: center; justify-content: center;
         }
 
-        /* --- 單一點位樣式 (當放大到沒聚合時顯示) --- */
+        /* --- 單點樣式 --- */
         .custom-pin {
-            background: #ff9900; /* 橘黃色亮點 */
-            border: 2px solid #fff;
-            border-radius: 50%;
-            box-shadow: 0 0 10px #ff9900;
+            background: #ff9900; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px #ff9900;
         }
 
-        /* --- 縣市邊界互動效果 --- */
-        /* 預設路徑樣式 */
-        path.leaflet-interactive {
-            transition: all 0.3s ease; /* 滑順過渡動畫 */
-        }
-        /* 滑鼠移過時的高亮樣式 (重要!) */
+        /* --- 邊界互動樣式 --- */
+        path.leaflet-interactive { transition: all 0.3s ease; }
         .highlight-feature {
-            filter: drop-shadow(0 0 10px var(--tech-blue)); /* 發光效果 */
+            stroke: var(--tech-blue) !important;
             stroke-width: 2px !important;
+            filter: drop-shadow(0 0 8px var(--tech-blue));
         }
 
-        /* RWD 手機調整 */
         @media (max-width: 768px) {
             .dashboard-overlay { top: auto; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; text-align: center; }
         }
@@ -74,10 +82,15 @@
 </head>
 <body>
 
+    <div id="loading-screen">
+        SYSTEM INITIALIZING...<br>正在下載地圖邊界資料
+        <div class="loading-bar"></div>
+    </div>
+
     <div class="dashboard-overlay">
-        <h2>地圖總覽</h2>
+        <h2>TW-SOLAR 監控</h2>
         <p>點選數字以查看詳細資訊。</p>
-        <p style="color: var(--tech-blue); font-size: 12px;">● 滑鼠移過/點擊區域可高亮顯示</p>
+        <p style="color: var(--tech-blue); font-size: 12px;">● 系統連線狀態: ONLINE</p>
     </div>
 
     <div id="map"></div>
@@ -88,98 +101,95 @@
     <script>
         // 1. 初始化地圖
         const map = L.map('map', {
-            center: [23.6, 120.96], // 調整中心點更接近圖片
-            zoom: 7.5, // 初始縮放
-            zoomControl: false, attributionControl: false
+            center: [23.6, 120.96], zoom: 7.5, zoomControl: false, attributionControl: false
         });
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // 2. 載入 OSM 底圖並套用 CSS 濾鏡黑化
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            opacity: 0.8 // 稍微降低透明度，讓底圖不要太搶眼
+            maxZoom: 19, opacity: 0.8
         }).addTo(map);
 
-
-        // 3. 【核心關鍵】載入真實的台灣縣市 GeoJSON 資料
-        // 使用穩定的開源資料來源
-        const TW_GEOJSON_URL = 'https://raw.githubusercontent.com/ronnywang/twgeojson/master/json/tw2010.json';
+        // 2. 【關鍵修正】使用 jsDelivr CDN 連結，速度快且穩定
+        // 這是 2010 年縣市界 (tw2010.json)，包含五都改制前的詳細資料，非常適合視覺展示
+        const TW_GEOJSON_URL = 'https://cdn.jsdelivr.net/gh/ronnywang/twgeojson@master/json/tw2010.json';
         
         let geojsonLayer;
 
-        // 定義預設樣式 (未選取時) - 淡淡的細線
+        // 預設樣式：只顯示淡淡的灰線，不干擾
         function defaultStyle(feature) {
             return {
-                fillColor: 'transparent', // 不填色
-                weight: 1,                // 細線
-                opacity: 0.4,             // 透明度高
-                color: '#666',            // 深灰色線條
+                fillColor: 'transparent',
+                weight: 1,
+                opacity: 0.5,
+                color: '#555', // 深灰
                 fillOpacity: 0
             };
         }
 
-        // 定義高亮樣式 (選取時) - 您的圖片中的亮藍色效果
+        // 高亮樣式：科技藍
         function highlightStyle(e) {
             const layer = e.target;
             layer.setStyle({
-                weight: 2,                // 線條變粗
-                color: '#00f0ff',         // 亮藍色邊框
-                fillColor: '#00f0ff',     // 亮藍色填滿
-                fillOpacity: 0.5,         // 半透明填滿
-                className: 'highlight-feature' // 加入 CSS 發光特效
+                weight: 2,
+                color: '#00f0ff',
+                fillColor: '#00f0ff',
+                fillOpacity: 0.3, // 藍色半透明填充
+                className: 'highlight-feature'
             });
-            layer.bringToFront(); // 確保高亮層在最上面
+            layer.bringToFront();
         }
 
-        // 定義取消高亮樣式
         function resetHighlight(e) {
             geojsonLayer.resetStyle(e.target);
         }
 
-        // 定義點擊縮放
         function zoomToFeature(e) {
             map.fitBounds(e.target.getBounds());
         }
 
-        // 讀取並繪製邊界資料
+        // 3. 讀取資料並加上錯誤處理
         fetch(TW_GEOJSON_URL)
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error("網路回應錯誤");
+                return res.json();
+            })
             .then(data => {
+                // 成功載入！
+                document.getElementById('loading-screen').style.display = 'none'; // 隱藏 Loading
+
                 geojsonLayer = L.geoJSON(data, {
                     style: defaultStyle,
                     onEachFeature: function(feature, layer) {
                         layer.on({
-                            mouseover: highlightStyle, // 滑鼠移入
-                            mouseout: resetHighlight,  // 滑鼠移出
-                            click: function(e) {       // 點擊
-                                highlightStyle(e); // 手機版點擊也要高亮
-                                zoomToFeature(e);  // 縮放
+                            mouseover: highlightStyle,
+                            mouseout: resetHighlight,
+                            click: function(e) {
+                                highlightStyle(e);
+                                zoomToFeature(e);
                             }
                         });
                     }
                 }).addTo(map);
-                // 確保邊界圖層在 Marker 之下
                 geojsonLayer.bringToBack();
             })
-            .catch(err => console.error("圖資載入失敗，請檢查網路連線", err));
+            .catch(err => {
+                // 失敗處理
+                console.error("地圖載入失敗:", err);
+                document.getElementById('loading-screen').innerHTML = 
+                    `<span style="color:#ff3366">錯誤：無法下載地圖資料<br>請檢查網路或稍後再試</span>`;
+            });
 
-
-        // 4. 模擬 GPS 點位資料 (分佈在各縣市)
+        // 4. GPS 點位與聚合
         const rawData = [
-            [25.0330, 121.5654], [25.0400, 121.5500], [25.0350, 121.5200], [25.0600, 121.5300], // 台北
-            [25.0100, 121.4600], [25.0000, 121.5000], [24.9500, 121.3800], // 新北
-            [24.1477, 120.6736], [24.1600, 120.6400], [24.1300, 120.6600], [24.2300, 120.5700], // 台中
-            [22.9997, 120.2270], [23.0100, 120.1900], // 台南
-            [22.6273, 120.3014], [22.6500, 120.2800], [22.6000, 120.3300], [22.7000, 120.4000], // 高雄
-            [23.9872, 121.6011], [23.8000, 121.5000], // 花蓮
-            [24.8000, 120.9700] // 新竹
+            [25.0330, 121.5654], [25.0400, 121.5500], [25.0350, 121.5200], // 台北
+            [24.1477, 120.6736], [24.1600, 120.6400], [24.2300, 120.5700], // 台中
+            [22.9997, 120.2270], [22.6273, 120.3014], [22.6500, 120.2800], // 南部
+            [23.9872, 121.6011], [24.8000, 120.9700] // 東部與其他
         ];
 
-        // 5. 設定聚合群組 (模仿圖片中的白色數字圓圈)
         const markers = L.markerClusterGroup({
             iconCreateFunction: function(cluster) {
                 const count = cluster.getChildCount();
-                // 動態計算圓圈大小
                 let size = count > 10 ? 50 : 40;
                 return L.divIcon({
                     html: `<div>${count}</div>`,
@@ -187,21 +197,18 @@
                     iconSize: L.point(size, size)
                 });
             },
-            showCoverageOnHover: false, // 不顯示聚合邊界
-            zoomToBoundsOnClick: true,  // 點擊數字放大
-            spiderfyOnMaxZoom: true     // 放大到極限時散開
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            spiderfyOnMaxZoom: true
         });
 
-        // 加入點位
         rawData.forEach(point => {
-            const customIcon = L.divIcon({
-                className: '', html: '<div class="custom-pin" style="width:12px;height:12px;"></div>', iconSize: [12, 12]
-            });
-            markers.addLayer(L.marker(point, { icon: customIcon }).bindPopup("案場資訊..."));
+            markers.addLayer(L.marker(point, { 
+                icon: L.divIcon({ className: '', html: '<div class="custom-pin" style="width:12px;height:12px;"></div>', iconSize: [12, 12] }) 
+            }).bindPopup("案場詳細資訊"));
         });
 
         map.addLayer(markers);
-
     </script>
 </body>
 </html>
