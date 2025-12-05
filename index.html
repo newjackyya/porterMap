@@ -3,189 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TW-Solar 智慧監控儀表板</title>
+    <title>台灣案場分佈儀表板 - 終極版</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
     <style>
-        /* --- 1. 全域科技風設定 --- */
+        /* --- 全域與背景設定 --- */
         :root {
-            --tech-blue: #00f0ff;
-            --tech-dark: #050a14;
-            --tech-glow: 0 0 10px rgba(0, 240, 255, 0.5);
-            --panel-bg: rgba(5, 10, 20, 0.85);
+            --tech-blue: #00f0ff; /* 核心科技藍 */
+            --tech-bg: #0b1120;   /* 深藍底色，對照您的圖片 */
         }
+        body, html { margin: 0; padding: 0; height: 100%; background-color: var(--tech-bg); font-family: "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+        #map { height: 100%; width: 100%; background: var(--tech-bg); z-index: 1; }
 
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            background-color: var(--tech-dark);
-            font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
-            color: #fff;
-            overflow: hidden;
-        }
-
-        /* 背景網格特效 (Cyberpunk Grid) */
-        .grid-bg {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-image: 
-                linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        #map {
-            height: 100%;
-            width: 100%;
-            z-index: 1;
-            background: transparent; /* 讓網格透出來 */
-        }
-
-        /* --- 2. 地圖濾鏡 (核心視覺) --- */
+        /* --- 核心地圖濾鏡 (將 OSM 轉為深色科技風) --- */
         .leaflet-layer {
-            /* 對 OSM 圖資進行更強烈的反相與調色 */
-            filter: invert(100%) hue-rotate(190deg) brightness(80%) contrast(110%) saturate(80%);
+            /* 高對比、深藍色調、反相 */
+            filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(90%);
         }
 
-        /* --- 3. 縣市邊界樣式 --- */
-        /* 這些樣式由 JS 動態控制，但這裡設定預設過渡效果 */
-        path.leaflet-interactive {
-            transition: stroke 0.3s, stroke-width 0.3s, fill-opacity 0.3s;
-            vector-effect: non-scaling-stroke; /* 縮放時線條不變粗 */
+        /* --- 左上角儀表板面板 --- */
+        .dashboard-overlay {
+            position: absolute; top: 20px; left: 20px; z-index: 1000;
+            background: rgba(16, 26, 48, 0.85); /* 半透明深色背景 */
+            border: 1px solid rgba(0, 240, 255, 0.3); /* 細微藍框 */
+            padding: 20px; border-radius: 4px; color: #fff;
+            backdrop-filter: blur(5px); box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
+        .dashboard-overlay h2 { margin: 0 0 10px 0; font-size: 20px; font-weight: 500; letter-spacing: 1px; }
+        .dashboard-overlay p { margin: 5px 0; font-size: 14px; color: #aaa; }
 
-        /* --- 4. 儀表板 UI --- */
-        .dashboard-panel {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 1000;
-            width: 280px;
-            background: var(--panel-bg);
-            border: 1px solid var(--tech-blue);
-            box-shadow: var(--tech-glow), inset 0 0 20px rgba(0, 240, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 4px;
-            padding: 20px;
-            /* 掃描線動畫 */
-            overflow: hidden;
-        }
-
-        .dashboard-panel::before {
-            content: "";
-            position: absolute;
-            top: -100%;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.2), transparent);
-            animation: scanline 3s infinite linear;
-            pointer-events: none;
-        }
-
-        h1 {
-            margin: 0;
-            font-size: 20px;
-            color: var(--tech-blue);
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border-bottom: 1px solid rgba(0, 240, 255, 0.3);
-            padding-bottom: 10px;
-            margin-bottom: 10px;
-        }
-
-        .stat-box {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        .stat-value {
-            font-family: 'Courier New', monospace;
-            color: var(--tech-blue);
-            font-weight: bold;
-        }
-
-        /* 手機版樣式調整 */
-        @media (max-width: 768px) {
-            .dashboard-panel {
-                top: auto;
-                bottom: 0;
-                left: 0;
-                width: 100%;
-                border-radius: 10px 10px 0 0;
-                border: none;
-                border-top: 2px solid var(--tech-blue);
-                padding: 15px;
-                box-sizing: border-box;
-            }
-            .grid-bg { background-size: 20px 20px; }
-        }
-
-        @keyframes scanline {
-            0% { top: -100%; }
-            100% { top: 200%; }
-        }
-
-        /* --- 5. MarkerCluster 自訂樣式 --- */
-        .marker-cluster-tech {
-            background-color: rgba(5, 10, 20, 0.8) !important;
-            border: 1px solid var(--tech-blue);
-            color: var(--tech-blue);
+        /* --- 聚合點數字樣式 (對照圖片中的白色數字) --- */
+        .marker-cluster-custom {
+            background-color: rgba(255, 255, 255, 0.9); /* 白色背景 */
+            border: 3px solid var(--tech-blue); /* 藍色外框 */
             border-radius: 50%;
-            font-family: monospace;
-            font-weight: bold;
-            box-shadow: 0 0 10px var(--tech-blue);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            animation: pulse 3s infinite;
+            color: #333; /* 深色文字 */
+            font-weight: bold; font-family: sans-serif; text-align: center;
+            box-shadow: 0 0 15px var(--tech-blue); /* 強烈藍色發光 */
+            font-size: 16px;
+            display: flex !important; align-items: center; justify-content: center;
         }
-        
+
+        /* --- 單一點位樣式 (當放大到沒聚合時顯示) --- */
         .custom-pin {
-            background: var(--tech-blue);
+            background: #ff9900; /* 橘黃色亮點 */
             border: 2px solid #fff;
-            box-shadow: 0 0 15px var(--tech-blue);
             border-radius: 50%;
+            box-shadow: 0 0 10px #ff9900;
         }
 
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(0, 240, 255, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0); }
+        /* --- 縣市邊界互動效果 --- */
+        /* 預設路徑樣式 */
+        path.leaflet-interactive {
+            transition: all 0.3s ease; /* 滑順過渡動畫 */
+        }
+        /* 滑鼠移過時的高亮樣式 (重要!) */
+        .highlight-feature {
+            filter: drop-shadow(0 0 10px var(--tech-blue)); /* 發光效果 */
+            stroke-width: 2px !important;
         }
 
-        /* Popup 美化 */
-        .leaflet-popup-content-wrapper {
-            background: rgba(5, 10, 20, 0.95);
-            border: 1px solid var(--tech-blue);
-            color: #fff;
-            border-radius: 2px;
+        /* RWD 手機調整 */
+        @media (max-width: 768px) {
+            .dashboard-overlay { top: auto; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; text-align: center; }
         }
-        .leaflet-popup-tip { background: var(--tech-blue); }
-        .leaflet-container a.leaflet-popup-close-button { color: var(--tech-blue); }
     </style>
 </head>
 <body>
 
-    <div class="grid-bg"></div>
-
-    <div class="dashboard-panel">
-        <h1>系統概覽</h1>
-        <div class="stat-box"><span>監控案場數</span> <span class="stat-value">20</span></div>
-        <div class="stat-box"><span>正常運作</span> <span class="stat-value">18</span></div>
-        <div class="stat-box"><span>待檢修</span> <span class="stat-value" style="color: #ff3366;">2</span></div>
-        <div style="margin-top: 10px; font-size: 12px; color: #888;">
-            點擊地圖上的數字可放大區域。<br>
-            <span style="color:var(--tech-blue)">●</span> 藍框區域表示縣市邊界
-        </div>
+    <div class="dashboard-overlay">
+        <h2>地圖總覽</h2>
+        <p>點選數字以查看詳細資訊。</p>
+        <p style="color: var(--tech-blue); font-size: 12px;">● 滑鼠移過/點擊區域可高亮顯示</p>
     </div>
 
     <div id="map"></div>
@@ -194,160 +86,121 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <script>
-        // --- 1. 初始化地圖 ---
+        // 1. 初始化地圖
         const map = L.map('map', {
-            center: [23.8, 121.0], // 台灣中心
-            zoom: 7.5,
-            zoomSnap: 0.5, // 允許 0.5 層級縮放，視覺更舒適
-            zoomControl: false,
-            attributionControl: false
+            center: [23.6, 120.96], // 調整中心點更接近圖片
+            zoom: 7.5, // 初始縮放
+            zoomControl: false, attributionControl: false
         });
-
-        // 右下角縮放鈕
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // --- 2. 載入並濾鏡化 OSM 底圖 ---
+        // 2. 載入 OSM 底圖並套用 CSS 濾鏡黑化
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            opacity: 0.6 // 讓背景網格透出來一點
+            opacity: 0.8 // 稍微降低透明度，讓底圖不要太搶眼
         }).addTo(map);
 
-        // --- 3. 定義 GPS 點位資料 (模擬資料) ---
-        const sites = [
-            { loc: [25.0330, 121.5654], name: "台北信義案場", status: "normal" },
-            { loc: [25.0800, 121.5700], name: "台北內湖案場", status: "normal" },
-            { loc: [25.0100, 121.4600], name: "新北板橋案場", status: "warning" },
-            { loc: [24.9900, 121.4500], name: "新北土城案場", status: "normal" },
-            { loc: [24.8000, 120.9700], name: "新竹東區案場", status: "normal" },
-            { loc: [24.8100, 121.0300], name: "新竹竹北案場", status: "normal" },
-            { loc: [24.1477, 120.6736], name: "台中中區案場", status: "normal" },
-            { loc: [24.1600, 120.6400], name: "台中西屯案場", status: "warning" },
-            { loc: [24.2300, 120.5700], name: "台中沙鹿案場", status: "normal" },
-            { loc: [23.9600, 120.9600], name: "南投埔里案場", status: "normal" },
-            { loc: [23.7000, 120.4300], name: "雲林虎尾案場", status: "normal" },
-            { loc: [23.4800, 120.4500], name: "嘉義市區案場", status: "normal" },
-            { loc: [22.9997, 120.2270], name: "台南東區案場", status: "normal" },
-            { loc: [23.1500, 120.2500], name: "台南麻豆案場", status: "normal" },
-            { loc: [23.0500, 120.3000], name: "台南新化案場", status: "normal" },
-            { loc: [22.6273, 120.3014], name: "高雄新興案場", status: "normal" },
-            { loc: [22.6500, 120.2800], name: "高雄左營案場", status: "normal" },
-            { loc: [22.6000, 120.4000], name: "高雄大寮案場", status: "normal" },
-            { loc: [23.9872, 121.6011], name: "花蓮市案場", status: "normal" },
-            { loc: [22.7500, 121.1400], name: "台東市案場", status: "normal" }
-        ];
 
-        // --- 4. 建立 Marker Cluster (聚合功能) ---
-        const markers = L.markerClusterGroup({
-            iconCreateFunction: function(cluster) {
-                const count = cluster.getChildCount();
-                let sizeClass = count > 10 ? 'large' : 'medium';
-                // 使用自訂 CSS class 繪製科技感數字圈
-                return L.divIcon({
-                    html: `<div>${count}</div>`,
-                    className: 'marker-cluster-tech',
-                    iconSize: L.point(40, 40)
-                });
-            },
-            showCoverageOnHover: false,
-            zoomToBoundsOnClick: true,
-            spiderfyOnMaxZoom: true
-        });
+        // 3. 【核心關鍵】載入真實的台灣縣市 GeoJSON 資料
+        // 使用穩定的開源資料來源
+        const TW_GEOJSON_URL = 'https://raw.githubusercontent.com/ronnywang/twgeojson/master/json/tw2010.json';
+        
+        let geojsonLayer;
 
-        sites.forEach(site => {
-            const iconColor = site.status === 'normal' ? '#00f0ff' : '#ff3366';
-            
-            // 自訂單點樣式
-            const customIcon = L.divIcon({
-                className: '', // 清除預設
-                html: `<div style="
-                    background-color: ${iconColor};
-                    width: 12px; height: 12px;
-                    border-radius: 50%;
-                    box-shadow: 0 0 10px ${iconColor};
-                    border: 2px solid #fff;"></div>`,
-                iconSize: [12, 12],
-                iconAnchor: [6, 6]
-            });
-
-            const marker = L.marker(site.loc, { icon: customIcon });
-            marker.bindPopup(`
-                <div style="min-width:150px">
-                    <h3 style="margin:0; color:#00f0ff">${site.name}</h3>
-                    <p style="margin:5px 0 0 0; color:#ddd">狀態: 
-                        <span style="color:${iconColor}">${site.status === 'normal' ? '正常運作' : '異常檢修'}</span>
-                    </p>
-                    <p style="font-size:10px; color:#888; margin-top:5px">Lat: ${site.loc[0]}, Lng: ${site.loc[1]}</p>
-                </div>
-            `);
-            markers.addLayer(marker);
-        });
-
-        // 必須確保 Marker 層在 GeoJSON 之上，這裡先加入 map，後續 GeoJSON 會透過 z-index 控制
-        map.addLayer(markers);
-
-
-        // --- 5. 進階：載入台灣縣市邊界 GeoJSON ---
-        // 使用 GitHub 上穩定的 GeoJSON 來源 (2010版縣市界，適合做視覺示意)
-        const geoJsonUrl = 'https://raw.githubusercontent.com/ronnywang/twgeojson/master/json/tw2010.json';
-
-        // 定義縣市邊界樣式函數
-        function style(feature) {
+        // 定義預設樣式 (未選取時) - 淡淡的細線
+        function defaultStyle(feature) {
             return {
-                fillColor: '#00f0ff',  // 填充顏色
-                fillOpacity: 0,        // 預設完全透明 (只顯示框線)
-                weight: 1,             // 線條粗細
-                opacity: 0.5,          // 線條透明度
-                color: '#00f0ff',      // 線條顏色 (科技藍)
-                dashArray: '3',        // 虛線效果
+                fillColor: 'transparent', // 不填色
+                weight: 1,                // 細線
+                opacity: 0.4,             // 透明度高
+                color: '#666',            // 深灰色線條
+                fillOpacity: 0
             };
         }
 
-        // 定義互動事件
-        function highlightFeature(e) {
-            var layer = e.target;
+        // 定義高亮樣式 (選取時) - 您的圖片中的亮藍色效果
+        function highlightStyle(e) {
+            const layer = e.target;
             layer.setStyle({
-                weight: 2,
-                color: '#fff',
-                dashArray: '',
-                fillOpacity: 0.2 // 滑鼠移上去時，稍微亮起填充色
+                weight: 2,                // 線條變粗
+                color: '#00f0ff',         // 亮藍色邊框
+                fillColor: '#00f0ff',     // 亮藍色填滿
+                fillOpacity: 0.5,         // 半透明填滿
+                className: 'highlight-feature' // 加入 CSS 發光特效
             });
-            layer.bringToFront(); // 拉到最上層
+            layer.bringToFront(); // 確保高亮層在最上面
         }
 
+        // 定義取消高亮樣式
         function resetHighlight(e) {
             geojsonLayer.resetStyle(e.target);
         }
 
+        // 定義點擊縮放
         function zoomToFeature(e) {
             map.fitBounds(e.target.getBounds());
         }
 
-        function onEachFeature(feature, layer) {
-            layer.on({
-                mouseover: highlightFeature,
-                mouseout: resetHighlight,
-                click: zoomToFeature
-            });
-        }
-
-        let geojsonLayer;
-
-        // 非同步抓取資料
-        fetch(geoJsonUrl)
-            .then(response => response.json())
+        // 讀取並繪製邊界資料
+        fetch(TW_GEOJSON_URL)
+            .then(res => res.json())
             .then(data => {
                 geojsonLayer = L.geoJSON(data, {
-                    style: style,
-                    onEachFeature: onEachFeature
+                    style: defaultStyle,
+                    onEachFeature: function(feature, layer) {
+                        layer.on({
+                            mouseover: highlightStyle, // 滑鼠移入
+                            mouseout: resetHighlight,  // 滑鼠移出
+                            click: function(e) {       // 點擊
+                                highlightStyle(e); // 手機版點擊也要高亮
+                                zoomToFeature(e);  // 縮放
+                            }
+                        });
+                    }
                 }).addTo(map);
-                
-                // 為了確保點擊 marker 不會被圖層擋住，將 GeoJSON 往後推
+                // 確保邊界圖層在 Marker 之下
                 geojsonLayer.bringToBack();
             })
-            .catch(err => {
-                console.error("無法載入縣市邊界資料:", err);
-                // 失敗時不影響地圖與點位顯示，僅會在 console 報錯
+            .catch(err => console.error("圖資載入失敗，請檢查網路連線", err));
+
+
+        // 4. 模擬 GPS 點位資料 (分佈在各縣市)
+        const rawData = [
+            [25.0330, 121.5654], [25.0400, 121.5500], [25.0350, 121.5200], [25.0600, 121.5300], // 台北
+            [25.0100, 121.4600], [25.0000, 121.5000], [24.9500, 121.3800], // 新北
+            [24.1477, 120.6736], [24.1600, 120.6400], [24.1300, 120.6600], [24.2300, 120.5700], // 台中
+            [22.9997, 120.2270], [23.0100, 120.1900], // 台南
+            [22.6273, 120.3014], [22.6500, 120.2800], [22.6000, 120.3300], [22.7000, 120.4000], // 高雄
+            [23.9872, 121.6011], [23.8000, 121.5000], // 花蓮
+            [24.8000, 120.9700] // 新竹
+        ];
+
+        // 5. 設定聚合群組 (模仿圖片中的白色數字圓圈)
+        const markers = L.markerClusterGroup({
+            iconCreateFunction: function(cluster) {
+                const count = cluster.getChildCount();
+                // 動態計算圓圈大小
+                let size = count > 10 ? 50 : 40;
+                return L.divIcon({
+                    html: `<div>${count}</div>`,
+                    className: 'marker-cluster-custom',
+                    iconSize: L.point(size, size)
+                });
+            },
+            showCoverageOnHover: false, // 不顯示聚合邊界
+            zoomToBoundsOnClick: true,  // 點擊數字放大
+            spiderfyOnMaxZoom: true     // 放大到極限時散開
+        });
+
+        // 加入點位
+        rawData.forEach(point => {
+            const customIcon = L.divIcon({
+                className: '', html: '<div class="custom-pin" style="width:12px;height:12px;"></div>', iconSize: [12, 12]
             });
+            markers.addLayer(L.marker(point, { icon: customIcon }).bindPopup("案場資訊..."));
+        });
+
+        map.addLayer(markers);
 
     </script>
 </body>
